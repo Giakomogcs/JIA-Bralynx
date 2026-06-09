@@ -1,0 +1,268 @@
+{
+  "name": "Bralyx-Bridge",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-stats", "responseMode": "responseNode", "options": {} },
+      "id": "b1000001-0000-4000-8000-000000000001",
+      "name": "WH stats",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "bralyx-tool-stats"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT bx_stats() AS data;", "options": {} },
+      "id": "b1000001-0000-4000-8000-000000000002",
+      "name": "Q stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 0],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b1000001-0000-4000-8000-000000000003",
+      "name": "R stats",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 0]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-dashboard", "responseMode": "responseNode", "options": {} },
+      "id": "b2000002-0000-4000-8000-000000000001",
+      "name": "WH dashboard",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 160],
+      "webhookId": "bralyx-tool-dashboard"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT * FROM bx_dashboard_ops(\n  NULLIF('{{ $json.body.status || '' }}','')::text,\n  NULLIF('{{ $json.body.mercado || '' }}','')::text,\n  NULLIF('{{ $json.body.search || '' }}','')::text,\n  NULLIF('{{ $json.body.sort || '' }}','')::text,\n  COALESCE({{ $json.body.limit || 50 }}, 50),\n  COALESCE({{ $json.body.offset || 0 }}, 0)\n);", "options": {} },
+      "id": "b2000002-0000-4000-8000-000000000002",
+      "name": "Q dashboard",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 160],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b2000002-0000-4000-8000-000000000003",
+      "name": "R dashboard",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 160]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-op-detalhe", "responseMode": "responseNode", "options": {} },
+      "id": "b3000003-0000-4000-8000-000000000001",
+      "name": "WH op-detalhe",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 320],
+      "webhookId": "bralyx-tool-op-detalhe"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT bx_op_detalhe('{{ $json.body.numero }}'::text) AS data;", "options": {} },
+      "id": "b3000003-0000-4000-8000-000000000002",
+      "name": "Q op-detalhe",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 320],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b3000003-0000-4000-8000-000000000003",
+      "name": "R op-detalhe",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 320]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-faltantes", "responseMode": "responseNode", "options": {} },
+      "id": "b4000004-0000-4000-8000-000000000001",
+      "name": "WH faltantes",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 480],
+      "webhookId": "bralyx-tool-faltantes"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT * FROM bx_componentes_faltantes(\n  COALESCE({{ $json.body.sem_pedido || false }}, false)::boolean,\n  NULLIF('{{ $json.body.search || '' }}','')::text,\n  COALESCE({{ $json.body.limit || 100 }}, 100)\n);", "options": {} },
+      "id": "b4000004-0000-4000-8000-000000000002",
+      "name": "Q faltantes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 480],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b4000004-0000-4000-8000-000000000003",
+      "name": "R faltantes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 480]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-liberar-montagem", "responseMode": "responseNode", "options": {} },
+      "id": "b5000005-0000-4000-8000-000000000001",
+      "name": "WH liberar-montagem",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 640],
+      "webhookId": "bralyx-tool-liberar-montagem"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT * FROM bx_liberar_montagem(\n  COALESCE({{ $json.body.incluir_quase || true }}, true)::boolean,\n  COALESCE({{ $json.body.limit || 50 }}, 50)\n);", "options": {} },
+      "id": "b5000005-0000-4000-8000-000000000002",
+      "name": "Q liberar-montagem",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 640],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b5000005-0000-4000-8000-000000000003",
+      "name": "R liberar-montagem",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 640]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-compras-atrasadas", "responseMode": "responseNode", "options": {} },
+      "id": "b6000006-0000-4000-8000-000000000001",
+      "name": "WH compras-atrasadas",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 800],
+      "webhookId": "bralyx-tool-compras-atrasadas"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT * FROM bx_compras_atrasadas();", "options": {} },
+      "id": "b6000006-0000-4000-8000-000000000002",
+      "name": "Q compras-atrasadas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 800],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b6000006-0000-4000-8000-000000000003",
+      "name": "R compras-atrasadas",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 800]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-importacoes", "responseMode": "responseNode", "options": {} },
+      "id": "b7000007-0000-4000-8000-000000000001",
+      "name": "WH importacoes",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 960],
+      "webhookId": "bralyx-tool-importacoes"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT * FROM bx_list_importacoes(COALESCE({{ $json.body.limit || 30 }}, 30));", "options": {} },
+      "id": "b7000007-0000-4000-8000-000000000002",
+      "name": "Q importacoes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 960],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b7000007-0000-4000-8000-000000000003",
+      "name": "R importacoes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 960]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-learning", "responseMode": "responseNode", "options": {} },
+      "id": "b8000008-0000-4000-8000-000000000001",
+      "name": "WH learning",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 1120],
+      "webhookId": "bralyx-tool-learning"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT * FROM bx_learning_signals();", "options": {} },
+      "id": "b8000008-0000-4000-8000-000000000002",
+      "name": "Q learning",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 1120],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b8000008-0000-4000-8000-000000000003",
+      "name": "R learning",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 1120]
+    },
+
+    {
+      "parameters": { "httpMethod": "POST", "path": "bralyx-tool-decision", "responseMode": "responseNode", "options": {} },
+      "id": "b9000009-0000-4000-8000-000000000001",
+      "name": "WH decision",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 1280],
+      "webhookId": "bralyx-tool-decision"
+    },
+    {
+      "parameters": { "operation": "executeQuery", "query": "SELECT bx_record_decision(\n  '{{ $json.body.op_numero }}'::text,\n  '{{ $json.body.acao }}',\n  NULL,\n  NULLIF('{{ $json.body.motivo || '' }}',''),\n  'ia'\n) AS data;", "options": {} },
+      "id": "b9000009-0000-4000-8000-000000000002",
+      "name": "Q decision",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [240, 1280],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": { "respondWith": "allIncomingItems", "options": {} },
+      "id": "b9000009-0000-4000-8000-000000000003",
+      "name": "R decision",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 1280]
+    }
+  ],
+  "connections": {
+    "WH stats": { "main": [[{ "node": "Q stats", "type": "main", "index": 0 }]] },
+    "Q stats": { "main": [[{ "node": "R stats", "type": "main", "index": 0 }]] },
+    "WH dashboard": { "main": [[{ "node": "Q dashboard", "type": "main", "index": 0 }]] },
+    "Q dashboard": { "main": [[{ "node": "R dashboard", "type": "main", "index": 0 }]] },
+    "WH op-detalhe": { "main": [[{ "node": "Q op-detalhe", "type": "main", "index": 0 }]] },
+    "Q op-detalhe": { "main": [[{ "node": "R op-detalhe", "type": "main", "index": 0 }]] },
+    "WH faltantes": { "main": [[{ "node": "Q faltantes", "type": "main", "index": 0 }]] },
+    "Q faltantes": { "main": [[{ "node": "R faltantes", "type": "main", "index": 0 }]] },
+    "WH liberar-montagem": { "main": [[{ "node": "Q liberar-montagem", "type": "main", "index": 0 }]] },
+    "Q liberar-montagem": { "main": [[{ "node": "R liberar-montagem", "type": "main", "index": 0 }]] },
+    "WH compras-atrasadas": { "main": [[{ "node": "Q compras-atrasadas", "type": "main", "index": 0 }]] },
+    "Q compras-atrasadas": { "main": [[{ "node": "R compras-atrasadas", "type": "main", "index": 0 }]] },
+    "WH importacoes": { "main": [[{ "node": "Q importacoes", "type": "main", "index": 0 }]] },
+    "Q importacoes": { "main": [[{ "node": "R importacoes", "type": "main", "index": 0 }]] },
+    "WH learning": { "main": [[{ "node": "Q learning", "type": "main", "index": 0 }]] },
+    "Q learning": { "main": [[{ "node": "R learning", "type": "main", "index": 0 }]] },
+    "WH decision": { "main": [[{ "node": "Q decision", "type": "main", "index": 0 }]] },
+    "Q decision": { "main": [[{ "node": "R decision", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

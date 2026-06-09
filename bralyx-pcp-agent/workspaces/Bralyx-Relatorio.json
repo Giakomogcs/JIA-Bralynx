@@ -1,0 +1,103 @@
+{
+  "name": "Bralyx-Relatorio",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bralyx-relatorio",
+        "responseMode": "responseNode",
+        "options": { "rawBody": false }
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "name": "Receive Report",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-368, 144],
+      "webhookId": "bralyx-relatorio"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lê o CSV do Protheus (binário 'data'), detecta o tipo do relatório e devolve as linhas.\n// Dois relatórios, ambos CSV (separador ';'):\n//   - OP/Empenhos + Transferência  -> colunas C2_PRODUTO / D4_COD / Soma de D4_QUANT / D4_XQTRANS\n//   - Lista de Prioridades         -> colunas Mercado / MONTADOR / MÁQUINA / Situação / CLIENTE\nconst buf = await this.helpers.getBinaryDataBuffer(0, 'data');\nlet text = buf.toString('utf8');\nif (((text.match(/\\uFFFD/g) || []).length) > 3) text = buf.toString('latin1');\ntext = text.replace(/^\\uFEFF/, '');\nconst lines = text.split(/\\r?\\n/).filter((l) => l.trim().length);\nif (!lines.length) throw new Error('Arquivo vazio.');\n\nconst sniff = lines.slice(0, 8).join('\\n');\nconst delim = ((sniff.split(';').length) >= (sniff.split(',').length)) ? ';' : ',';\n\nfunction parseLine(line) {\n  const out = []; let cur = ''; let q = false;\n  for (let i = 0; i < line.length; i++) {\n    const ch = line[i];\n    if (q) {\n      if (ch === '\"') { if (line[i + 1] === '\"') { cur += '\"'; i++; } else q = false; }\n      else cur += ch;\n    } else {\n      if (ch === '\"') q = true;\n      else if (ch === delim) { out.push(cur); cur = ''; }\n      else cur += ch;\n    }\n  }\n  out.push(cur);\n  return out.map((s) => s.trim());\n}\n\nconst headerRe = /D4_COD|C2_PRODUTO|Soma de D4_QUANT|D4_XQTRANS|D4_XQFALFI|MONTADOR|M[\\u00c1A]QUINA|Mercado|Situa|CLIENTE|Data final acordada/i;\nlet h = 0;\nfor (let i = 0; i < lines.length; i++) { if (headerRe.test(lines[i])) { h = i; break; } }\nconst header = parseLine(lines[h]);\n\nconst rows = [];\nfor (let i = h + 1; i < lines.length; i++) {\n  const cells = parseLine(lines[i]);\n  if (cells.every((c) => c === '')) continue;\n  const o = {};\n  header.forEach((k, idx) => { if (k) o[k] = cells[idx] != null ? cells[idx] : ''; });\n  rows.push(o);\n}\n\nconst hj = header.join('|');\nlet tipo = null;\nif (/D4_COD|Soma de D4_QUANT|C2_PRODUTO|D4_XQTRANS|D4_XQFALFI/i.test(hj)) tipo = 'op_empenhos';\nelse if (/MONTADOR|M[\\u00c1A]QUINA|Mercado|Situa|CLIENTE|Data final acordada/i.test(hj)) tipo = 'prioridades';\nif (!tipo) throw new Error('Não reconheci o relatório (esperado OP/Empenhos ou Prioridades).');\n\nconst bin = ($input.first().binary && $input.first().binary.data) || {};\nconst arquivo = bin.fileName || (tipo === 'op_empenhos' ? 'OP_Empenhos.csv' : 'Prioridades.csv');\nreturn [{ json: { tipo, arquivo, total_linhas: rows.length, rows } }];"
+      },
+      "id": "c0000000-0000-4000-8000-000000000002",
+      "name": "Parse CSV & Detect",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 144]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            {
+              "id": "t1",
+              "leftValue": "={{ $json.tipo }}",
+              "rightValue": "op_empenhos",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000003",
+      "name": "É OP/Empenhos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [64, 144]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bx_ingest_ops_empenhos($1::jsonb, $2) AS data;",
+        "options": { "queryReplacement": "={{ [JSON.stringify($json.rows), $json.arquivo] }}" }
+      },
+      "id": "c0000000-0000-4000-8000-000000000004",
+      "name": "Ingest OP/Empenhos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [288, 32],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bx_ingest_prioridades($1::jsonb, $2) AS data;",
+        "options": { "queryReplacement": "={{ [JSON.stringify($json.rows), $json.arquivo] }}" }
+      },
+      "id": "c0000000-0000-4000-8000-000000000005",
+      "name": "Ingest Prioridades",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [288, 256],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.data) }}",
+        "options": {}
+      },
+      "id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [520, 144]
+    }
+  ],
+  "connections": {
+    "Receive Report": { "main": [[{ "node": "Parse CSV & Detect", "type": "main", "index": 0 }]] },
+    "Parse CSV & Detect": { "main": [[{ "node": "É OP/Empenhos?", "type": "main", "index": 0 }]] },
+    "É OP/Empenhos?": {
+      "main": [
+        [{ "node": "Ingest OP/Empenhos", "type": "main", "index": 0 }],
+        [{ "node": "Ingest Prioridades", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ingest OP/Empenhos": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Ingest Prioridades": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" }
+}

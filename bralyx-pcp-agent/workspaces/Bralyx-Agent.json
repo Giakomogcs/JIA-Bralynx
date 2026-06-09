@@ -1,0 +1,281 @@
+{
+  "name": "Bralyx-Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bralyx-AgentRag",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0bac6808-0000-4000-8000-000000000001",
+      "name": "Webhook: AgentRag",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "bralyx-agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Envelope: { sessionId, userId, userName?, message? | chatInput? }\n// Antepõe [CONTEXTO DO USUÁRIO ...]; o trigger da tabela bx_chat_message lê\n// esse bloco para popular user_id.\nconst body = $input.first().json.body ?? $input.first().json;\nconst sessionId = (body.sessionId || '').toString().trim();\nconst userId    = (body.userId    || '').toString().trim();\nconst userName  = (body.userName  || '').toString().trim();\nlet rawMsg      = (body.message   || body.chatInput || '').toString();\nrawMsg = rawMsg.replace(/^\\s*\\[CONTEXTO[^\\]]*\\]\\s*/i, '').trim();\nif (!sessionId) throw new Error('sessionId is required');\nif (!userId)    throw new Error('userId is required');\nconst header = `[CONTEXTO DO USUÁRIO: nome=\"${userName}\" ID=\"${userId}\"]`;\nconst chatInput = `${header}\\n\\n${rawMsg}`;\nreturn { sessionId, userId, userName, chatInput, original_message: rawMsg };"
+      },
+      "id": "65148c21-0000-4000-8000-000000000002",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Prepare Input').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "Você é o **Copiloto de PCP da Bralyx** (uso interno), que apoia o **Planejamento e Controle da Produção** e a **Montagem** a decidir **quais Ordens de Produção (OPs) podem ir para a montagem** e **o que ainda falta** para liberar as demais — sem parar a linha e respeitando as datas acordadas com o cliente.\n\n## COMO O DADO É ORGANIZADO\n- Uma **OP (Ordem de Produção)** representa a fabricação de um produto (com código, descrição, quantidade, mercado, cliente, montador e situação no ERP/Protheus).\n- Cada OP tem **empenhos** = os componentes necessários para montá-la. Para cada componente o sistema sabe: **qtd_necessaria**, **qtd_transferida** (o que já foi separado/transferido para a OP) e **qtd_falta** (= necessária − transferida).\n- Quando um componente está em falta, o sistema verifica se existe um **pedido de compra** em aberto para ele (com fornecedor e data prevista) e se esse pedido está **atrasado**.\n\n## STATUS (determinístico, já calculado no banco — você NÃO recalcula)\n**Status do componente:**\n- **ok** — não falta nada (qtd_falta ≤ 0).\n- **transferido** — já foi transferido o suficiente para a OP.\n- **falta_parcial** — falta uma parte (0 < falta < necessária).\n- **falta_total** — não há nada transferido (falta ≥ necessária).\n\n**Status da OP:**\n- **completa** — nenhum componente em falta. `pode_montar = true` → liberar para montagem.\n- **quase_completa** — faltam poucos itens (≤ 3 componentes OU ≤ 10% do total). Quase lá; priorizar o que falta.\n- **travada** — faltam muitos componentes; depende de compra/transferência.\n- **sem_dados** — OP sem empenhos cadastrados; peça para reimportar o relatório.\n\nSeu papel é **explicar e priorizar** em linguagem clara para PCP/Montagem, nunca recalcular.\n\n## SEU OBJETIVO\n(1) Dizer **quais OPs podem ser montadas agora** (status completa); (2) para uma OP específica, listar **o que falta** (componente, quantidade faltante, se tem pedido, previsão e fornecedor); (3) apontar os **componentes faltantes** que travam o maior número de OPs e os que **não têm pedido**; (4) destacar **compras atrasadas** que impedem a liberação.\n\n## FERRAMENTAS\n1. `stats()` — visão geral: total de OPs e quantas estão completas / quase completas / travadas / sem dados, nº de componentes faltantes, faltantes sem pedido e compras atrasadas. Sem parâmetros.\n2. `list_ops({status?, mercado?, search?, sort?, limit?, offset?})` — lista priorizada de OPs (número, produto, quantidade, mercado, cliente, montador, status, pode_montar, nº de componentes em falta, faltantes sem pedido, data acordada, dias de atraso). status: completa|quase_completa|travada|sem_dados. sort: entrega|atraso. **Primeira chamada** para falar de OPs.\n3. `op_detalhe({numero})` — detalhe de UMA OP pelo número: cabeçalho + lista de componentes faltantes (código, descrição, qtd necessária/transferida/falta, status, estoque, se tem pedido, previsão, se atrasado, fornecedor) + os já transferidos. Use sempre que o usuário citar uma OP específica.\n4. `componentes_faltantes({sem_pedido?, search?, limit?})` — componentes em falta agregados entre TODAS as OPs (quantas OPs cada um afeta, qtd total faltante, se tem pedido, previsão, fornecedor). Use `sem_pedido:true` para ver o que ainda precisa virar pedido de compra.\n5. `liberar_montagem({incluir_quase?, limit?})` — OPs prontas para montagem (completas) e, opcionalmente, as quase completas. Use para responder 'o que posso montar?'.\n6. `compras_atrasadas()` — pedidos de compra atrasados (fornecedor, quantidade, data prevista, dias de atraso, quantas OPs dependem). Sem parâmetros.\n7. `list_importacoes({limit?})` — histórico de importações dos relatórios do ERP (OP_Empenhos e Prioridades), do mais recente ao mais antigo.\n8. `learning_signals()` — taxa de concordância das decisões passadas por status/ação. Consulte antes de recomendar para seguir o padrão do time. Sem parâmetros.\n9. `registrar_decisao({op_numero, acao, motivo?})` — registra a decisão de uma OP (liberar_montagem|priorizar_compra|cobrar_fornecedor|transferir|aguardar). Use SOMENTE quando o usuário pedir/confirmar; caso contrário apenas recomende.\n10. `search_knowledge_base(query)` — RAG nos documentos internos da Bralyx (políticas de PCP/compras, regras de status, manuais do Protheus, históricos). Use para fundamentar.\n11. `search_session_files(query)` — busca SOMENTE nos arquivos anexados NESTA conversa. Use quando o usuário citar 'o arquivo/relatório que enviei', 'este documento' ou 'o anexo'.\n\n## CONTEXTO DE PÁGINA\nA mensagem pode começar com `[PÁGINA: ...]` indicando a tela atual (Ordens de Produção, Faltantes, Compras atrasadas, Liberar montagem, Importações). Use para desambiguar pedidos curtos. NUNCA repita o marcador `[PÁGINA: ...]` na resposta.\n\n## PRINCÍPIOS\n1. **Priorize a montagem.** Quem está `completa` pode montar já. Depois trate as `quase_completa` (poucos itens) e por fim as `travada`.\n2. **Nunca invente** quantidade, estoque, pedido ou data. Se a OP estiver `sem_dados`, diga que faltam empenhos e peça para reimportar o relatório.\n3. **Sempre relacione o componente ao impacto** (quantas OPs ele trava) e à data acordada / dias de atraso.\n4. **stats() conta; list_ops()/op_detalhe() detalham.** Para falar de OPs ou componentes específicos você é OBRIGADO a chamar `list_ops` (com o status certo) e, para uma OP, `op_detalhe`.\n5. **Não se contradiga.** Se `stats()` mostra ops_travadas>0, não diga que 'está tudo liberado'. Se uma lista vier vazia mas o stats indica que existem, repita SEM filtros de search e com limit maior.\n6. **Sem JSON cru.** Responda em tabela markdown enxuta com os campos relevantes.\n7. **Saudação curta não chama tool.** Em 'oi/bom dia', explique o que faz e ofereça mostrar o que pode ser montado e o que está travado.\n\n## FLUXO 'O QUE POSSO MONTAR / O QUE FALTA'\n1. `stats()` para a visão geral.\n2. `liberar_montagem({incluir_quase:true})` — o que está pronto (e quase).\n3. Para 'o que falta na OP X', chame `op_detalhe({numero:'X'})` e liste os faltantes com pedido/previsão/fornecedor.\n4. Para gargalos gerais, `componentes_faltantes({sem_pedido:true})` e `compras_atrasadas()`.\n5. Monte a tabela e a recomendação. Só registre decisão com `registrar_decisao` se o usuário confirmar.\n\n## FORMATO DE RESPOSTA (lista de OPs)\n```\n## 🏭 Ordens de Produção — situação\n\n| OP | produto | cliente | status | falta | sem pedido | data acordada | atraso |\n| :- | :- | :- | :-: | -: | -: | :- | -: |\n| 012345 | Balança 300kg | Cliente A | completa | 0 | 0 | 12/04 | 0 |\n| 012346 | Balança 50kg | Cliente B | quase_completa | 2 | 1 | 10/04 | 3 |\n\n## ✅ Pode montar agora\n- **OP 012345** — todos os componentes transferidos. Liberar para montagem.\n\n## 🔧 Falta pouco\n- **OP 012346** — faltam 2 itens (1 sem pedido). Priorizar a compra de PARAF-08 (afeta 5 OPs) e a transferência de DISP-12.\n```\n\n## TOM\nTécnico, objetivo, **pt-BR**, voltado a PCP/Montagem. Markdown enxuto. Quando faltar dado, diga o que reimportar/cadastrar."
+        }
+      },
+      "id": "28da1434-0000-4000-8000-000000000003",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [464, 0]
+    },
+    {
+      "parameters": { "model": "gpt-4o-mini", "options": {} },
+      "id": "5e74e9f7-0000-4000-8000-000000000004",
+      "name": "Azure OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAzureOpenAi",
+      "typeVersion": 1,
+      "position": [-64, 288],
+      "credentials": { "azureOpenAiApi": { "id": "REPLACE_ME_AZURE_OPENAI_CRED", "name": "Azure OpenAI" } }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Prepare Input').item.json.sessionId }}",
+        "tableName": "bx_chat_message",
+        "contextWindowLength": 8
+      },
+      "id": "17a79df9-0000-4000-8000-000000000005",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [96, 288],
+      "credentials": { "postgres": { "id": "REPLACE_ME_BRALYX_DB", "name": "Bralyx-DB" } }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "search_knowledge_base",
+        "toolDescription": "Busca trechos nos documentos internos da Bralyx (políticas de PCP/compras, regras de status de OP, manuais do Protheus, históricos). Use para fundamentar recomendações.",
+        "tableName": { "__rl": true, "value": "bx_documents", "mode": "list" },
+        "topK": 6,
+        "options": { "queryName": "bx_match_documents" }
+      },
+      "id": "7cd6fa7e-0000-4000-8000-000000000006",
+      "name": "Supabase Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.1,
+      "position": [784, 288],
+      "credentials": { "supabaseApi": { "id": "REPLACE_ME_SUPABASE_CRED", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "search_session_files",
+        "toolDescription": "Busca SOMENTE nos arquivos que o usuário anexou NESTA conversa. Use quando o usuário pedir algo sobre 'o arquivo/relatório que enviei', 'este documento' ou 'o anexo'.",
+        "tableName": { "__rl": true, "value": "bx_documents", "mode": "list" },
+        "topK": 6,
+        "options": {
+          "queryName": "bx_match_documents",
+          "metadata": { "metadataValues": [ { "name": "session_id", "value": "={{ $('Prepare Input').item.json.sessionId }}" } ] }
+        }
+      },
+      "id": "aa8cebf1-0000-4000-8000-000000000007",
+      "name": "Supabase Vector Store (Sessão)",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.1,
+      "position": [1056, 288],
+      "credentials": { "supabaseApi": { "id": "REPLACE_ME_SUPABASE_CRED", "name": "Supabase account" } }
+    },
+    {
+      "parameters": { "model": "text-embedding-3-small", "options": {} },
+      "id": "52bd4a0a-0000-4000-8000-000000000008",
+      "name": "Azure OpenAI Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsAzureOpenAi",
+      "typeVersion": 1,
+      "position": [960, 496],
+      "credentials": { "azureOpenAiApi": { "id": "REPLACE_ME_AZURE_OPENAI_CRED", "name": "Azure OpenAI" } }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Visão geral: total de OPs e quantas estão completas/quase completas/travadas/sem dados, nº de componentes faltantes, faltantes sem pedido e compras atrasadas. Sem parâmetros.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-stats",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "9367630f-0000-4000-8000-000000000009",
+      "name": "stats",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [208, 496]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Lista priorizada de Ordens de Produção (número, produto, quantidade, mercado, cliente, montador, status, pode_montar, componentes em falta, faltantes sem pedido, data acordada, dias de atraso). Parâmetros (JSON): { status?: 'completa'|'quase_completa'|'travada'|'sem_dados', mercado?: string, search?: string, sort?: 'entrega'|'atraso', limit?: int, offset?: int }.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-dashboard",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "f771b1b5-0000-4000-8000-000000000010",
+      "name": "list_ops",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [368, 496]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Detalhe de UMA OP pelo número: cabeçalho + componentes faltantes (código, descrição, qtd necessária/transferida/falta, status, estoque, tem pedido, previsão, atrasado, fornecedor) + os já transferidos. Parâmetros (JSON): { numero: string }.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-op-detalhe",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "12d27d34-0000-4000-8000-000000000011",
+      "name": "op_detalhe",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [528, 496]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Componentes em falta agregados entre TODAS as OPs (quantas OPs cada um afeta, qtd total faltante, tem pedido, previsão, fornecedor, estoque). Parâmetros (JSON): { sem_pedido?: boolean, search?: string, limit?: int }. Use sem_pedido:true para ver o que ainda precisa virar pedido de compra.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-faltantes",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "fbe46fe2-0000-4000-8000-000000000012",
+      "name": "componentes_faltantes",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [688, 496]
+    },
+    {
+      "parameters": {
+        "toolDescription": "OPs prontas para montagem (status completa) e, opcionalmente, as quase completas. Parâmetros (JSON): { incluir_quase?: boolean, limit?: int }. Use para responder 'o que posso montar?'.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-liberar-montagem",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "cc7c5dec-0000-4000-8000-000000000013",
+      "name": "liberar_montagem",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [208, 640]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Pedidos de compra atrasados (número, código, descrição, fornecedor, quantidade, data do pedido, data prevista, dias de atraso, quantas OPs dependem). Sem parâmetros.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-compras-atrasadas",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "80e353fe-0000-4000-8000-000000000014",
+      "name": "compras_atrasadas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [368, 640]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Histórico de importações dos relatórios do ERP (OP_Empenhos e Prioridades), do mais recente ao mais antigo. Parâmetros (JSON): { limit?: int }.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-importacoes",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "7e7e838d-0000-4000-8000-000000000015",
+      "name": "list_importacoes",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [528, 640]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Taxa de concordância das decisões passadas por status/ação. Consulte antes de recomendar para seguir o padrão do time. Sem parâmetros.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-learning",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "d55abd9e-0000-4000-8000-000000000016",
+      "name": "learning_signals",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [688, 640]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Registra a decisão de uma OP. Use SOMENTE quando o usuário pedir/confirmar. Parâmetros (JSON): { op_numero: string, acao: 'liberar_montagem'|'priorizar_compra'|'cobrar_fornecedor'|'transferir'|'aguardar', motivo?: string }.",
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bralyx-tool-decision",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('payload', '{}', 'json') }}"
+      },
+      "id": "47e29e40-0000-4000-8000-000000000017",
+      "name": "registrar_decisao",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [528, 784]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"output\": {{ JSON.stringify($json.output) }}, \"sessionId\": \"{{ $('Prepare Input').item.json.sessionId }}\" }",
+        "options": {}
+      },
+      "id": "1affb300-0000-4000-8000-000000000018",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [784, 0]
+    }
+  ],
+  "connections": {
+    "Webhook: AgentRag": { "main": [[{ "node": "Prepare Input", "type": "main", "index": 0 }]] },
+    "Prepare Input": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
+    "AI Agent": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Azure OpenAI Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
+    "Postgres Chat Memory": { "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]] },
+    "Supabase Vector Store": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "Supabase Vector Store (Sessão)": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "Azure OpenAI Embeddings": { "ai_embedding": [[{ "node": "Supabase Vector Store", "type": "ai_embedding", "index": 0 }, { "node": "Supabase Vector Store (Sessão)", "type": "ai_embedding", "index": 0 }]] },
+    "stats": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "list_ops": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "op_detalhe": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "componentes_faltantes": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "liberar_montagem": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "compras_atrasadas": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "list_importacoes": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "learning_signals": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] },
+    "registrar_decisao": { "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "id": "BralyxAgent",
+  "tags": []
+}
