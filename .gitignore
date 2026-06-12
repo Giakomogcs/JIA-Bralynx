@@ -32,3 +32,5 @@ node_modules/
 
 # ===== Skills internos (Copilot) =====
 .github/skills/
+
+*.exe
