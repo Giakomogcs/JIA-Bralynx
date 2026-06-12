@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bralynx — Copiloto de PCP</title>
+    <title>Bralyx — Copiloto de PCP</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -258,6 +258,9 @@
       #chatFab svg { width: 24px; height: 24px; }
       #chatPanel { position: fixed; right: 22px; bottom: 22px; z-index: 55; width: 410px; max-width: 94vw; height: 620px; max-height: 86vh; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 70px rgba(8,30,70,.4); display: none; flex-direction: column; overflow: hidden; }
       #chatPanel.open { display: flex; }
+      /* expandido: ocupa a área útil sem cobrir sidebar nem topbar */
+      #chatPanel.max { left: calc(var(--sidebar-width) + 18px); top: 76px; right: 18px; bottom: 18px; width: auto; height: auto; max-width: none; max-height: none; }
+      @media (max-width: 900px) { #chatPanel.max { left: 12px; top: 66px; right: 12px; bottom: 12px; } }
       .chat-head { background: linear-gradient(135deg, var(--brand1), var(--brand2)); color: #fff; padding: 13px 16px; display: flex; align-items: center; gap: 10px; }
       .chat-head .t { font-weight: 700; }
       .chat-head .t small { display: block; font-weight: 500; font-size: 11px; color: #cdd9b8; }
@@ -266,13 +269,26 @@
       #chatSessions { border-bottom: 1px solid var(--line); max-height: 160px; overflow: auto; background: #fafbfe; }
       #chatSessions .s { padding: 9px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; cursor: pointer; font-size: 12.5px; }
       #chatSessions .s:hover { background: var(--pri-soft); }
-      #msgs { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-      .msg { max-width: 85%; padding: 10px 13px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; white-space: normal; }
+      #msgs { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+      .msg { max-width: 85%; min-width: 0; padding: 10px 13px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
       .msg.u { align-self: flex-end; background: var(--pri2); color: #fff; border-bottom-right-radius: 4px; }
       .msg.a { align-self: flex-start; background: #f1f4f9; color: var(--txt); border-bottom-left-radius: 4px; }
+      .msg.a:has(.tbl-scroll) { max-width: 100%; width: 100%; }
       .msg.a code { background: #e2e8f3; padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
-      .msg.a table { font-size: 12px; margin: 6px 0; }
-      .msg.a th, .msg.a td { padding: 4px 7px; }
+      .msg.a h3, .msg.a h4, .msg.a h5 { margin: 10px 0 6px; }
+      .msg.a p { margin: 4px 0; }
+      .msg.a ul { margin: 4px 0; padding-left: 18px; }
+      /* tabelas do chat: scroll-x só aqui, dentro do balão */
+      .msg.a .tbl-scroll { overflow-x: auto; max-width: 100%; margin: 8px 0; border: 1px solid #dbe1ec; border-radius: 10px; background: #fff; }
+      .msg.a .tbl-scroll::-webkit-scrollbar { height: 8px; }
+      .msg.a .tbl-scroll::-webkit-scrollbar-thumb { background: #c8cfdd; border-radius: 8px; border: 2px solid #fff; }
+      .msg.a .tbl-scroll::-webkit-scrollbar-track { background: transparent; }
+      .msg.a table { font-size: 12px; margin: 0; width: max-content; min-width: 100%; border-collapse: collapse; }
+      .msg.a th { position: static; background: #f4f6fb; color: #5a6678; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; padding: 7px 10px; border-bottom: 1px solid #dbe1ec; }
+      .msg.a td { padding: 6px 10px; border-bottom: 1px solid #eef1f6; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+      .msg.a tbody tr:last-child td { border-bottom: none; }
+      .msg.a tbody tr:nth-child(even) { background: #fafbfe; }
+      .msg.a tbody tr:hover { background: #f3f7ea; }
       .chat-input { border-top: 1px solid var(--line); padding: 10px; display: flex; gap: 8px; align-items: flex-end; }
       .chat-input textarea { resize: none; height: 44px; max-height: 140px; }
       .chat-input button { flex-shrink: 0; }
@@ -291,6 +307,74 @@
       .dropzone.dragover { border-color: var(--pri); background: var(--pri-soft); transform: scale(1.01); }
       .dropzone.busy { opacity: .7; pointer-events: none; }
       .dropzone .dz-status { margin-top: 12px; font-size: 12.5px; min-height: 18px; }
+
+      /* ===== Painel / Dashboard ===== */
+      .dash-hero { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; background: linear-gradient(135deg, var(--brand1), var(--brand2)); color: #eef3e6; border-radius: 18px; padding: 20px 24px; margin-bottom: 18px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+      .dash-hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, rgba(167,200,75,.22), transparent 70%); }
+      .dash-hero .dh-gauge { flex: 0 0 auto; position: relative; z-index: 1; }
+      .dash-hero .dh-info { flex: 1 1 220px; min-width: 200px; z-index: 1; }
+      .dash-hero .dh-info h3 { margin: 0 0 4px; font-size: 17px; color: #fff; }
+      .dash-hero .dh-info p { margin: 0; font-size: 13px; color: #b9c4ab; line-height: 1.5; }
+      .dash-hero .dh-meta { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 12px; }
+      .dash-hero .dh-meta .m b { display: block; font-size: 20px; font-weight: 800; color: #fff; line-height: 1.1; }
+      .dash-hero .dh-meta .m span { font-size: 11.5px; color: #9fae8e; }
+      .dash-hero .dh-btn { z-index: 1; }
+      .gauge { width: 132px; height: 132px; }
+      .gauge .g-num { font-size: 30px; font-weight: 800; text-anchor: middle; fill: #fff; }
+      .gauge .g-lbl { font-size: 9.5px; text-anchor: middle; fill: #9fae8e; text-transform: uppercase; letter-spacing: 1px; }
+
+      .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .insight { display: flex; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); text-align: left; width: 100%; }
+      a.insight { text-decoration: none; color: inherit; transition: border-color .15s, box-shadow .15s, transform .06s; }
+      a.insight:hover { border-color: var(--pri); box-shadow: 0 4px 16px rgba(84,118,26,.16); transform: translateY(-1px); }
+      .insight .ic { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+      .insight .ic svg { width: 20px; height: 20px; }
+      .insight.ok .ic { background: var(--okbg); color: var(--ok); }
+      .insight.warn .ic { background: var(--warnbg); color: var(--warn); }
+      .insight.bad .ic { background: var(--nobg); color: var(--no); }
+      .insight.info .ic { background: var(--pri-soft); color: var(--pri2); }
+      .insight .tx b { display: block; font-size: 21px; font-weight: 800; line-height: 1.1; }
+      .insight .tx span { font-size: 12.5px; color: var(--muted); }
+
+      .dash-grid { display: grid; gap: 16px; margin-bottom: 18px; }
+      .dash-2 { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+      .dash-3 { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+      .card .head .hd-act { margin-left: auto; }
+      .card.clickable { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+      .card.clickable:hover { border-color: var(--pri); box-shadow: 0 4px 16px rgba(84,118,26,.14); }
+
+      .donut-wrap { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+      .donut { width: 150px; height: 150px; flex: 0 0 auto; }
+      .donut .dn-num { font-size: 27px; font-weight: 800; text-anchor: middle; fill: var(--txt); }
+      .donut .dn-lbl { font-size: 9.5px; text-anchor: middle; fill: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+      .dn-legend { display: flex; flex-direction: column; gap: 9px; flex: 1 1 150px; min-width: 150px; }
+      .dn-legend .li { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+      .dn-legend .sw { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
+      .dn-legend .li b { margin-left: auto; font-variant-numeric: tabular-nums; }
+      .dn-legend .li small { color: var(--muted); font-weight: 600; width: 38px; text-align: right; }
+
+      .hb-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12.5px; }
+      .hb-row:last-child { margin-bottom: 0; }
+      .hb-lbl { width: 132px; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--txt); font-weight: 600; }
+      .hb-track { flex: 1; height: 11px; background: var(--chip); border-radius: 6px; overflow: hidden; }
+      .hb-fill { height: 100%; border-radius: 6px; transition: width .4s ease; }
+      .hb-val { width: 44px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+      .alert-list { display: flex; flex-direction: column; }
+      .alert-item { display: flex; gap: 12px; align-items: center; padding: 11px 2px; border-bottom: 1px solid var(--line); }
+      .alert-item:last-child { border-bottom: none; }
+      .alert-item .ai { width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+      .alert-item .ai svg { width: 17px; height: 17px; }
+      .alert-item.bad .ai { background: var(--nobg); color: var(--no); }
+      .alert-item.warn .ai { background: var(--warnbg); color: var(--warn); }
+      .alert-item.ok .ai { background: var(--okbg); color: var(--ok); }
+      .alert-item .at { flex: 1; min-width: 0; }
+      .alert-item .at b { font-size: 13.5px; display: block; }
+      .alert-item .at span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .alert-item .av { font-weight: 800; font-size: 14px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+      .alert-item .av.bad { color: var(--no); }
+      .alert-item .av.warn { color: var(--warn); }
+      .alert-empty { display: flex; gap: 10px; align-items: center; color: var(--ok); font-weight: 600; font-size: 13.5px; padding: 8px 2px; }
     </style>
   </head>
   <body>
@@ -305,7 +389,7 @@
         <p class="sub">Entre para acompanhar Ordens de Produção, faltantes e montagem.</p>
         <div class="field">
           <label>E-mail</label>
-          <input id="email" type="email" placeholder="voce@bralynx.com.br" autocomplete="username" />
+          <input id="email" type="email" placeholder="voce@bralyx.com.br" autocomplete="username" />
         </div>
         <div class="field">
           <label>Senha</label>
@@ -321,6 +405,7 @@
       <aside class="sidebar">
         <div class="logo"><img class="logo-img" src="https://bralyx.com/wp-content/uploads/2024/03/logo-1.png.webp" alt="Bralyx" referrerpolicy="no-referrer" onerror="this.outerHTML='&lt;span style=&quot;color:#fff;font-weight:800;font-size:20px;letter-spacing:.5px&quot;&gt;BRALYX&lt;/span&gt;'" /><small>PCP &amp; MONTAGEM</small></div>
         <nav class="nav" id="nav">
+          <a data-view="painel"><i data-lucide="layout-dashboard"></i> Painel</a>
           <a data-view="ops"><i data-lucide="factory"></i> Ordens de Produção</a>
           <a data-view="montagem"><i data-lucide="check-check"></i> Liberar montagem</a>
           <a data-view="faltantes"><i data-lucide="package-x"></i> Faltantes</a>
@@ -354,10 +439,11 @@
     <div id="chatPanel">
       <div class="chat-head">
         <i data-lucide="bot"></i>
-        <div class="t">Copiloto Bralynx<small id="chatCtx">PCP &amp; Montagem</small></div>
+        <div class="t">Copiloto Bralyx<small id="chatCtx">PCP &amp; Montagem</small></div>
         <button id="newChat" title="Nova conversa">+ Novo</button>
         <button id="histBtn" title="Histórico">Histórico</button>
-        <button class="x" id="closeChat">✕</button>
+        <button class="x" id="maxChat" title="Expandir / restaurar">⛶</button>
+        <button class="x" id="closeChat" style="margin-left:0">✕</button>
       </div>
       <div id="chatSessions" class="hidden"></div>
       <div id="msgs"></div>
@@ -375,7 +461,7 @@
 
     <script>
       /* ============ CONFIG ============ */
-      // Mesmas URLs/keys do Supabase do projeto de referência (ambiente Bralynx).
+      // Mesmas URLs/keys do Supabase do projeto de referência (ambiente Bralyx).
       const CONFIG = {
         SUPABASE_URL: "https://longflatworm-supabase.cloudfy.live",
         SUPABASE_ANON_KEY:
@@ -453,7 +539,7 @@
       let ME = null;
       let isAdmin = false;
       let appReady = false;
-      let currentView = "ops";
+      let currentView = "painel";
       let curSession = null;
       let opPage = 0;
       const PAGE_SIZE = 25;
@@ -506,8 +592,8 @@
             while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
               rows.push(lines[i].trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim())); i++;
             }
-            html += "<table><thead><tr>" + header.map((h) => `<th>${mdInline(h)}</th>`).join("") + "</tr></thead><tbody>" +
-              rows.map((r) => "<tr>" + r.map((c) => `<td>${mdInline(c)}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
+            html += "<div class=\"tbl-scroll\"><table><thead><tr>" + header.map((h) => `<th>${mdInline(h)}</th>`).join("") + "</tr></thead><tbody>" +
+              rows.map((r) => "<tr>" + r.map((c) => `<td>${mdInline(c)}</td>`).join("") + "</tr>").join("") + "</tbody></table></div>";
             continue;
           }
           if (/^\s*[-*]\s+/.test(line)) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${mdInline(line.replace(/^\s*[-*]\s+/, ""))}</li>`; i++; continue; }
@@ -584,7 +670,7 @@
         $("#sideFoot").innerHTML = `<div class="side-user"><div class="sa">${esc((ME.full_name || "?").trim().charAt(0).toUpperCase())}</div><div class="si"><b>${esc(ME.full_name)}</b><span>${isAdmin ? "Administrador" : "Visualização"} · ${esc(ME.email)}</span></div></div>`;
         document.querySelectorAll(".admin-only").forEach((e) => e.classList.toggle("hidden", !isAdmin));
         if (window.lucide) lucide.createIcons();
-        if (!appReady) { appReady = true; navTo("ops"); }
+        if (!appReady) { appReady = true; navTo("painel"); }
       }
       sb.auth.getSession().then(({ data }) => handleSession(data.session));
       sb.auth.onAuthStateChange((_e, s) => handleSession(s));
@@ -592,12 +678,12 @@
 
       /* ============ ROUTER ============ */
       const VIEW_TITLES = {
-        ops: "Ordens de Produção", montagem: "Liberar montagem", faltantes: "Faltantes",
+        painel: "Painel", ops: "Ordens de Produção", montagem: "Liberar montagem", faltantes: "Faltantes",
         compras: "Compras atrasadas", dados: "Atualizar dados",
         documentos: "Documentos (RAG)", importacoes: "Importações", usuarios: "Usuários",
       };
       const VIEW_ICONS = {
-        ops: "factory", montagem: "check-check", faltantes: "package-x", compras: "truck",
+        painel: "layout-dashboard", ops: "factory", montagem: "check-check", faltantes: "package-x", compras: "truck",
         dados: "upload-cloud", documentos: "file-text", importacoes: "history", usuarios: "users",
       };
       function navTo(view) {
@@ -606,7 +692,7 @@
         document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === view));
         $("#viewTitle").innerHTML = `<span class="vt-ico"><i data-lucide="${VIEW_ICONS[view] || "circle"}"></i></span>${esc(VIEW_TITLES[view] || view)}`;
         $("#chatCtx").textContent = VIEW_TITLES[view] || "PCP & Montagem";
-        const render = { ops: viewOps, montagem: viewMontagem, faltantes: viewFaltantes, compras: viewCompras, dados: viewDados, documentos: viewDocumentos, importacoes: viewImportacoes, usuarios: viewUsuarios }[view];
+        const render = { painel: viewPainel, ops: viewOps, montagem: viewMontagem, faltantes: viewFaltantes, compras: viewCompras, dados: viewDados, documentos: viewDocumentos, importacoes: viewImportacoes, usuarios: viewUsuarios }[view];
         $("#content").innerHTML = `<div class="empty"><span class="spinner"></span> Carregando…</div>`;
         Promise.resolve().then(render)
           .then(() => { if (window.lucide) lucide.createIcons(); })
@@ -623,6 +709,234 @@
 
       function pageContextLabel() { return VIEW_TITLES[currentView] || currentView; }
       function refreshCurrentView() { navTo(currentView); }
+
+      /* ================= CHART HELPERS (SVG/CSS puro, sem libs) ================= */
+      function donutChart(segments, opts) {
+        opts = opts || {};
+        const segs = segments.filter((s) => Number(s.value) > 0);
+        const total = segs.reduce((a, s) => a + Number(s.value), 0) || 1;
+        const R = 56, CIRC = 2 * Math.PI * R;
+        let acc = 0;
+        let arcs;
+        if (!segs.length) {
+          arcs = `<circle cx="70" cy="70" r="${R}" fill="none" stroke="var(--chip)" stroke-width="20"/>`;
+        } else {
+          arcs = segs.map((s) => {
+            const frac = Number(s.value) / total;
+            const dash = frac * CIRC;
+            const c = `<circle cx="70" cy="70" r="${R}" fill="none" stroke="${s.color}" stroke-width="20" stroke-dasharray="${dash.toFixed(2)} ${(CIRC - dash).toFixed(2)}" stroke-dashoffset="${(-acc * CIRC).toFixed(2)}" transform="rotate(-90 70 70)" stroke-linecap="butt"/>`;
+            acc += frac;
+            return c;
+          }).join("");
+        }
+        const center = opts.center != null ? opts.center : total;
+        return `<svg viewBox="0 0 140 140" class="donut">${arcs}<text x="70" y="68" class="dn-num">${esc(String(center))}</text><text x="70" y="86" class="dn-lbl">${esc(opts.label || "")}</text></svg>`;
+      }
+      function gaugeChart(pct, label) {
+        const p = Math.max(0, Math.min(100, Math.round(pct)));
+        const R = 52, CIRC = 2 * Math.PI * R, dash = (p / 100) * CIRC;
+        const col = p >= 70 ? "#a7c84b" : p >= 40 ? "#f0b04a" : "#ef6a6a";
+        return `<svg viewBox="0 0 120 120" class="gauge">
+          <circle cx="60" cy="60" r="${R}" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="12"/>
+          <circle cx="60" cy="60" r="${R}" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${(CIRC - dash).toFixed(2)}" transform="rotate(-90 60 60)"/>
+          <text x="60" y="58" class="g-num">${p}%</text><text x="60" y="74" class="g-lbl">${esc(label || "")}</text></svg>`;
+      }
+      function hbars(items) {
+        if (!items.length) return `<div class="muted" style="font-size:13px">Sem dados.</div>`;
+        const max = Math.max(1, ...items.map((i) => Number(i.value) || 0));
+        return items.map((i) => `<div class="hb-row">
+          <div class="hb-lbl" title="${esc(i.label)}">${esc(i.label)}</div>
+          <div class="hb-track"><div class="hb-fill" style="width:${((Number(i.value) || 0) / max * 100).toFixed(1)}%;background:${i.color || "var(--pri)"}"></div></div>
+          <div class="hb-val">${fmtNum(i.value)}</div></div>`).join("");
+      }
+      function legendRow(color, label, value, total) {
+        const pct = total ? Math.round((value / total) * 100) : 0;
+        return `<div class="li"><span class="sw" style="background:${color}"></span>${esc(label)}<b>${fmtNum(value)}</b><small>${pct}%</small></div>`;
+      }
+
+      /* ================= VIEW: PAINEL (DASHBOARD GERAL) ================= */
+      async function viewPainel() {
+        const c = $("#content");
+        const [stats, ops, compras, semPedido] = await Promise.all([
+          rpc("bx_stats"),
+          rpc("bx_dashboard_ops", { p_limit: 2000, p_offset: 0 }).catch(() => []),
+          rpc("bx_compras_atrasadas").catch(() => []),
+          rpc("bx_componentes_faltantes", { p_sem_pedido: true, p_limit: 6 }).catch(() => []),
+        ]);
+        const opsArr = ops || [], comprasArr = compras || [], semPedArr = semPedido || [];
+
+        const total = Number(stats.ops_total) || 0;
+        const completas = Number(stats.ops_completas) || 0;
+        const quase = Number(stats.ops_quase) || 0;
+        const travadas = Number(stats.ops_travadas) || 0;
+        const semDados = Number(stats.ops_sem_dados) || 0;
+        const compFalt = Number(stats.componentes_faltantes) || 0;
+        const semPed = Number(stats.faltantes_sem_pedido) || 0;
+        const comprasAtr = Number(stats.compras_atrasadas) || 0;
+        const saude = total ? ((completas + quase) / total) * 100 : 0;
+
+        // Agregações client-side
+        // Atraso: usamos APENAS o que veio preenchido no relatório (não inferimos
+        // atraso por data). Por isso o "no prazo" só é mostrado quando há OPs com
+        // prazo/atraso conhecido — senão exibimos "sem dados de prazo".
+        const comAtrasoInfo = opsArr.filter((o) => o.dias_atraso != null || o.data_acordada != null);
+        const atrasadas = opsArr.filter((o) => Number(o.dias_atraso) > 0);
+        const temPrazo = comAtrasoInfo.length > 0;
+        const byMercado = {}, byMontador = {};
+        opsArr.forEach((o) => {
+          const m = (o.mercado || "—").trim() || "—";
+          byMercado[m] = (byMercado[m] || 0) + 1;
+          const mt = (o.montador || "—").trim() || "—";
+          byMontador[mt] = (byMontador[mt] || 0) + 1;
+        });
+        const toBars = (obj, color) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, value]) => ({ label, value, color }));
+        const mercadoBars = toBars(byMercado, "var(--pri)");
+        const montadorBars = toBars(byMontador, "var(--accent)");
+        // Travadas: ordena por atraso (quando houver) e depois por prioridade.
+        const topTravadas = opsArr.filter((o) => o.status_calculado === "travada")
+          .sort((a, b) => ((Number(b.dias_atraso) || 0) - (Number(a.dias_atraso) || 0)) || ((Number(b.prioridade) || 0) - (Number(a.prioridade) || 0)))
+          .slice(0, 6);
+
+        // ---- AVISOS (alertas priorizados) ----
+        const avisos = [];
+        comprasArr.slice(0, 4).forEach((p) => avisos.push({
+          sev: Number(p.dias_atraso) >= 7 ? "bad" : "warn", icon: "truck",
+          title: `Compra atrasada · ${esc(p.codigo)}`,
+          sub: `${esc(p.descricao || "")}${p.fornecedor_nome ? " · " + esc(p.fornecedor_nome) : ""} · ${fmtNum(p.ops_dependentes)} OP(s) dependente(s)`,
+          val: `${fmtNum(p.dias_atraso)}d`, view: "compras",
+        }));
+        // OPs travadas (não exige atraso — travada já é crítico por depender de compra).
+        topTravadas.slice(0, 3).forEach((o) => avisos.push({
+          sev: Number(o.faltantes_sem_pedido) > 0 ? "bad" : "warn", icon: "alert-triangle",
+          title: `OP travada · ${esc(o.numero)}`,
+          sub: `${esc(o.produto_descricao || o.produto_codigo || "")}${o.cliente ? " · " + esc(o.cliente) : ""} · ${fmtNum(o.componentes_falta)} faltante(s)`,
+          val: Number(o.dias_atraso) > 0 ? `${fmtNum(o.dias_atraso)}d` : `${fmtNum(o.componentes_falta)} falta`, view: "ops",
+        }));
+        semPedArr.slice(0, 3).forEach((s) => avisos.push({
+          sev: "bad", icon: "package-x",
+          title: `Sem pedido · ${esc(s.codigo)}`,
+          sub: `${esc(s.descricao || "")} · ${fmtNum(s.ops_afetadas)} OP(s) · falta ${fmtNum(s.qtd_falta_total)}`,
+          val: "compra", view: "faltantes",
+        }));
+
+        const ultima = stats.ultima_importacao ? fmtDateTime(stats.ultima_importacao) : "nenhuma importação ainda";
+
+        c.innerHTML = `
+          <div class="dash-hero">
+            <div class="dh-gauge">${gaugeChart(saude, "Prontas")}</div>
+            <div class="dh-info">
+              <h3>Visão geral da produção</h3>
+              <p>${total ? `<b style="color:#fff">${fmtNum(completas + quase)}</b> de <b style="color:#fff">${fmtNum(total)}</b> OPs prontas ou quase prontas para montagem.` : "Nenhuma OP carregada ainda. Importe os relatórios em <b style='color:#fff'>Atualizar dados</b>."}</p>
+              <div class="dh-meta">
+                <div class="m"><b${atrasadas.length ? ' style="color:#ff9a8b"' : ""}>${temPrazo ? fmtNum(atrasadas.length) : "—"}</b><span>${temPrazo ? "OPs atrasadas" : "Atraso: sem dados"}</span></div>
+                <div class="m"><b>${fmtNum(compFalt)}</b><span>Componentes faltantes</span></div>
+                <div class="m"><b>${fmtNum(comprasAtr)}</b><span>Compras atrasadas</span></div>
+              </div>
+            </div>
+            <button class="btn-ghost dh-btn" id="dashRefresh"><i data-lucide="refresh-cw"></i> Atualizar</button>
+          </div>
+
+          <div class="muted" style="font-size:12px;margin:-8px 0 16px 2px">Última atualização de dados: <b style="color:var(--txt)">${esc(ultima)}</b></div>
+
+          <div class="insight-grid">
+            <a class="insight ok" data-go="montagem">
+              <div class="ic"><i data-lucide="check-check"></i></div>
+              <div class="tx"><b>${fmtNum(completas)}</b><span>Podem ir para montagem agora</span></div>
+            </a>
+            <a class="insight warn" data-go="ops">
+              <div class="ic"><i data-lucide="loader"></i></div>
+              <div class="tx"><b>${fmtNum(quase)}</b><span>Quase completas (falta pouco)</span></div>
+            </a>
+            <a class="insight bad" data-go="ops">
+              <div class="ic"><i data-lucide="ban"></i></div>
+              <div class="tx"><b>${fmtNum(travadas)}</b><span>Travadas (dependem de compra)</span></div>
+            </a>
+            <a class="insight info" data-go="faltantes">
+              <div class="ic"><i data-lucide="shopping-cart"></i></div>
+              <div class="tx"><b>${fmtNum(semPed)}</b><span>Faltantes sem pedido (comprar)</span></div>
+            </a>
+          </div>
+
+          <div class="dash-grid dash-2">
+            <div class="card">
+              <div class="head"><i data-lucide="pie-chart"></i><h3>Status das Ordens de Produção</h3></div>
+              <div class="body">
+                <div class="donut-wrap">
+                  ${donutChart([
+                    { label: "Completas", value: completas, color: "#22a155" },
+                    { label: "Quase completas", value: quase, color: "#e0a032" },
+                    { label: "Travadas", value: travadas, color: "#e25555" },
+                    { label: "Sem dados", value: semDados, color: "#9aa4b2" },
+                  ], { center: fmtNum(total), label: "OPs" })}
+                  <div class="dn-legend">
+                    ${legendRow("#22a155", "Completas", completas, total)}
+                    ${legendRow("#e0a032", "Quase completas", quase, total)}
+                    ${legendRow("#e25555", "Travadas", travadas, total)}
+                    ${legendRow("#9aa4b2", "Sem dados", semDados, total)}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="head"><i data-lucide="bell-ring"></i><h3>Avisos &amp; alertas</h3><span class="badge ${avisos.length ? "b-alto" : "b-baixo"} hd-act">${avisos.length} ${avisos.length === 1 ? "aviso" : "avisos"}</span></div>
+              <div class="body">
+                ${avisos.length ? `<div class="alert-list">${avisos.slice(0, 8).map((a) => `
+                  <div class="alert-item ${a.sev}" data-go="${a.view}">
+                    <div class="ai"><i data-lucide="${a.icon}"></i></div>
+                    <div class="at"><b>${a.title}</b><span>${a.sub}</span></div>
+                    <div class="av ${a.sev}">${a.val}</div>
+                  </div>`).join("")}</div>`
+                  : `<div class="alert-empty"><i data-lucide="party-popper"></i> Nenhum alerta crítico. Tudo sob controle.</div>`}
+              </div>
+            </div>
+          </div>
+
+          <div class="dash-grid dash-3">
+            <div class="card clickable" data-go="ops">
+              <div class="head"><i data-lucide="globe"></i><h3>OPs por mercado</h3></div>
+              <div class="body">${hbars(mercadoBars)}</div>
+            </div>
+            <div class="card clickable" data-go="ops">
+              <div class="head"><i data-lucide="users"></i><h3>OPs por montador</h3></div>
+              <div class="body">${hbars(montadorBars)}</div>
+            </div>
+            <div class="card clickable" data-go="compras">
+              <div class="head"><i data-lucide="shopping-cart"></i><h3>Comprar com urgência</h3></div>
+              <div class="body">
+                ${semPedArr.length ? `<div class="alert-list">${semPedArr.map((s) => `
+                  <div class="alert-item bad">
+                    <div class="ai"><i data-lucide="package-x"></i></div>
+                    <div class="at"><b>${esc(s.codigo)}</b><span>${esc(s.descricao || "—")} · ${fmtNum(s.ops_afetadas)} OP(s)</span></div>
+                    <div class="av bad">${fmtNum(s.qtd_falta_total)}</div>
+                  </div>`).join("")}</div>`
+                  : `<div class="alert-empty"><i data-lucide="check-circle"></i> Sem faltantes pendentes de compra.</div>`}
+              </div>
+            </div>
+          </div>
+
+          <div class="card clickable" data-go="ops">
+            <div class="head"><i data-lucide="alert-triangle"></i><h3>OPs travadas — priorize a compra</h3><span class="muted hd-act" style="font-size:12px">Ver todas →</span></div>
+            <div class="body" style="padding:0">
+              <div class="table-wrap" style="border:none">
+                <table><thead><tr><th>OP</th><th>Produto</th><th>Cliente</th><th>Montador</th><th class="num">Falta</th><th class="num">Sem pedido</th><th>Data acordada</th><th class="num">Atraso</th></tr></thead>
+                <tbody>${topTravadas.length ? topTravadas.map((o) => `<tr>
+                  <td><strong>${esc(o.numero)}</strong></td>
+                  <td>${esc(o.produto_descricao || o.produto_codigo || "—")}</td>
+                  <td>${esc(o.cliente || "—")}</td>
+                  <td>${esc(o.montador || "—")}</td>
+                  <td class="num danger-cell">${fmtNum(o.componentes_falta)}</td>
+                  <td class="num ${Number(o.faltantes_sem_pedido) > 0 ? "danger-cell" : ""}">${fmtNum(o.faltantes_sem_pedido)}</td>
+                  <td>${fmtDate(o.data_acordada)}</td>
+                  <td class="num ${Number(o.dias_atraso) > 0 ? "danger-cell" : ""}">${o.dias_atraso != null ? fmtNum(o.dias_atraso) : "—"}</td>
+                </tr>`).join("") : `<tr><td colspan="8" class="empty">${emptyState("party-popper", "Nenhuma OP travada", "Todas as OPs têm caminho para a montagem.")}</td></tr>`}</tbody></table>
+              </div>
+            </div>
+          </div>`;
+
+        if (window.lucide) lucide.createIcons();
+        $("#dashRefresh").addEventListener("click", () => refreshCurrentView());
+        c.querySelectorAll("[data-go]").forEach((e) => e.addEventListener("click", () => navTo(e.dataset.go)));
+      }
 
       /* ================= VIEW: ORDENS DE PRODUÇÃO ================= */
       async function viewOps() {
@@ -1091,7 +1405,8 @@
       function renderSuggest() { $("#suggest").innerHTML = SUGGEST.map((s) => `<button>${esc(s)}</button>`).join(""); $("#suggest").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { $("#chatInput").value = b.textContent; sendChat(); })); }
       function renderChatEmpty() { $("#msgs").innerHTML = `<div class="empty">Olá! Sou o copiloto de PCP. Pergunte o que pode ser montado, o que falta numa OP ou quais compras estão atrasadas.</div>`; renderSuggest(); }
       $("#chatFab").addEventListener("click", () => { $("#chatPanel").classList.add("open"); $("#chatFab").style.display = "none"; if (!$("#msgs").innerHTML.trim()) renderChatEmpty(); if (window.lucide) lucide.createIcons(); });
-      $("#closeChat").addEventListener("click", () => { $("#chatPanel").classList.remove("open"); $("#chatFab").style.display = "flex"; });
+      $("#closeChat").addEventListener("click", () => { $("#chatPanel").classList.remove("open", "max"); $("#chatFab").style.display = "flex"; });
+      $("#maxChat").addEventListener("click", () => { $("#chatPanel").classList.toggle("max"); $("#msgs").scrollTop = $("#msgs").scrollHeight; });
       function newSessionId() { return "sess-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8); }
       $("#newChat").addEventListener("click", () => { curSession = newSessionId(); renderChatEmpty(); $("#chatSessions").classList.add("hidden"); });
       $("#histBtn").addEventListener("click", () => { const s = $("#chatSessions"); s.classList.toggle("hidden"); if (!s.classList.contains("hidden")) loadSessions(); });

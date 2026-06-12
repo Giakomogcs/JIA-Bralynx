@@ -1,7 +1,7 @@
 -- =============================================
 -- Bralyx — 007: Seeds (apenas admin bootstrap)
 --
--- - Cria/atualiza o admin (admin@bralynx.com.br / @Admin123)
+-- - Cria/atualiza o admin (admin@bralyx.com.br / @Admin123)
 --     * a senha NÃO é sobrescrita em re-execuções (preserva rotações em prod)
 --
 -- IMPORTANTE — sem dados de exemplo:
@@ -16,12 +16,12 @@
 
 DO $$
 DECLARE
-  v_email     TEXT := 'admin@bralynx.com.br';
+  v_email     TEXT := 'admin@bralyx.com.br';
   v_password  TEXT := '@Admin123';
   v_user_id   UUID;
   -- company_name é o identificador interno usado pelos guards (bx_is_admin/bx_is_member)
-  -- e filtros de usuários: TEM de ser 'bralyx' (NÃO mexer). Só o e-mail/marca é "Bralynx".
-  v_meta      JSONB := '{"role":"admin","company_name":"bralyx","full_name":"Administrador Bralynx"}'::jsonb;
+  -- e filtros de usuários: TEM de ser 'bralyx' (NÃO mexer).
+  v_meta      JSONB := '{"role":"admin","company_name":"bralyx","full_name":"Administrador Bralyx"}'::jsonb;
 BEGIN
   SELECT id INTO v_user_id FROM auth.users WHERE email = v_email LIMIT 1;
 
@@ -48,13 +48,13 @@ BEGIN
       jsonb_build_object('sub', v_user_id::text, 'email', v_email, 'email_verified', true),
       'email', NOW(), NOW(), NOW()
     );
-    RAISE NOTICE 'Bralynx bootstrap admin criado: %', v_email;
+    RAISE NOTICE 'Bralyx bootstrap admin criado: %', v_email;
   ELSE
     UPDATE auth.users
        SET raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || v_meta,
            updated_at = NOW()
      WHERE id = v_user_id;
-    RAISE NOTICE 'Bralynx bootstrap admin já existe, metadata atualizada: %', v_email;
+    RAISE NOTICE 'Bralyx bootstrap admin já existe, metadata atualizada: %', v_email;
   END IF;
 END
 $$;
@@ -62,6 +62,6 @@ $$;
 NOTIFY pgrst, 'reload schema';
 
 -- =======  DOWN  ========
--- DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email='admin@bralynx.com.br');
--- DELETE FROM auth.users WHERE email='admin@bralynx.com.br';
+-- DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email='admin@bralyx.com.br');
+-- DELETE FROM auth.users WHERE email='admin@bralyx.com.br';
 -- NOTIFY pgrst, 'reload schema';

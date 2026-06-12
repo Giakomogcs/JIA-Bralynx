@@ -26,22 +26,68 @@
 
 -- =======  UP  ========
 
--- helper: parse de data BR ('DD/MM/YYYY [HH24:MI:SS]', 'DD-mon' ou ISO) -> timestamptz
+-- helper: parse de data BR -> timestamptz
+--   Formatos aceitos:
+--     * ISO / 'DD/MM/YYYY [HH24:MI:SS]' / 'YYYYMMDD'
+--     * 'DD/MM' (sem ano)            -> assume o ANO ATUAL
+--     * 'DD-mmm' em português         -> ex.: 27-fev, 24/abr  (assume ANO ATUAL)
+--     * 'DD-mmm-YY' / 'DD-mmm-YYYY'   -> ex.: 5-mai-26
+--   Obs.: depende de CURRENT_DATE p/ completar o ano -> função STABLE.
 CREATE OR REPLACE FUNCTION bx_parse_ts(p_txt TEXT)
 RETURNS TIMESTAMPTZ
 LANGUAGE plpgsql
-IMMUTABLE
+STABLE
 AS $$
 DECLARE
-  v TIMESTAMPTZ;
+  v     TIMESTAMPTZ;
+  s     TEXT;
+  parts TEXT[];
+  d     TEXT;
+  mon   TEXT;
+  yr    TEXT;
+  mm    TEXT;
 BEGIN
   IF p_txt IS NULL OR TRIM(p_txt) = '' THEN
     RETURN NULL;
   END IF;
+  s := lower(trim(p_txt));
+
+  -- formatos completos primeiro
   BEGIN v := p_txt::timestamptz; RETURN v; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN RETURN to_timestamp(p_txt, 'DD/MM/YYYY HH24:MI:SS'); EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN RETURN to_timestamp(p_txt, 'DD/MM/YYYY'); EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN RETURN to_timestamp(p_txt, 'YYYYMMDD'); EXCEPTION WHEN OTHERS THEN RETURN NULL; END;
+  BEGIN RETURN to_timestamp(s, 'DD/MM/YYYY HH24:MI:SS'); EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN RETURN to_timestamp(s, 'DD/MM/YYYY');            EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN RETURN to_timestamp(s, 'YYYYMMDD');              EXCEPTION WHEN OTHERS THEN NULL; END;
+
+  -- 'DD<sep>mmm[<sep>YY|YYYY]'  (mês abreviado em português)
+  parts := regexp_match(s, '^(\d{1,2})[\/\-\. ]+([a-zç]{3,})\.?(?:[\/\-\. ]+(\d{2,4}))?$');
+  IF parts IS NOT NULL THEN
+    d   := parts[1];
+    mon := substr(parts[2], 1, 3);
+    yr  := parts[3];
+    mm  := CASE mon
+             WHEN 'jan' THEN '01' WHEN 'fev' THEN '02' WHEN 'mar' THEN '03'
+             WHEN 'abr' THEN '04' WHEN 'mai' THEN '05' WHEN 'jun' THEN '06'
+             WHEN 'jul' THEN '07' WHEN 'ago' THEN '08' WHEN 'set' THEN '09'
+             WHEN 'out' THEN '10' WHEN 'nov' THEN '11' WHEN 'dez' THEN '12'
+             ELSE NULL END;
+    IF mm IS NOT NULL THEN
+      IF yr IS NULL THEN yr := to_char(CURRENT_DATE, 'YYYY');
+      ELSIF length(yr) = 2 THEN yr := '20' || yr; END IF;
+      BEGIN
+        RETURN to_timestamp(lpad(d,2,'0') || '/' || mm || '/' || yr, 'DD/MM/YYYY');
+      EXCEPTION WHEN OTHERS THEN RETURN NULL; END;
+    END IF;
+  END IF;
+
+  -- 'DD/MM' (sem ano) -> ano atual
+  parts := regexp_match(s, '^(\d{1,2})[\/\-\.](\d{1,2})$');
+  IF parts IS NOT NULL THEN
+    BEGIN
+      RETURN to_timestamp(lpad(parts[1],2,'0') || '/' || lpad(parts[2],2,'0') || '/' || to_char(CURRENT_DATE,'YYYY'), 'DD/MM/YYYY');
+    EXCEPTION WHEN OTHERS THEN RETURN NULL; END;
+  END IF;
+
+  RETURN NULL;
 END;
 $$;
 
