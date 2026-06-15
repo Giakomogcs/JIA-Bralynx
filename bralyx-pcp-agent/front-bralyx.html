@@ -1962,7 +1962,7 @@
       };
       const stripCtx = (s) =>
         (s == null ? "" : String(s)).replace(
-          /^\s*\[(?:CONTEXTO|P\u00c1GINA|PAGINA)[^\]]*\]\s*/i,
+          /^(?:\s*\[(?:CONTEXTO|P\u00c1GINA|PAGINA)[^\]]*\]\s*)+/i,
           "",
         );
 
@@ -3423,7 +3423,7 @@
             ? list
                 .map(
                   (s) =>
-                    `<div class="s" data-id="${esc(s.session_id || s.sessionId)}"><i data-lucide="message-square"></i><span class="grow">${esc((s.title || s.session_id || "").slice(0, 40))}</span></div>`,
+                    `<div class="s" data-id="${esc(s.session_id || s.sessionId)}"><i data-lucide="message-square"></i><span class="grow">${esc(stripCtx(s.titulo || s.title || "").slice(0, 40) || "Conversa")}</span></div>`,
                 )
                 .join("")
             : `<div class="empty" style="padding:16px">Sem conversas anteriores.</div>`;
